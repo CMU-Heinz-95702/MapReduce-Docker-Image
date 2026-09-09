@@ -26,6 +26,14 @@
     <value>-Xmx384m</value>
   </property>
   <property>
+    <name>yarn.app.mapreduce.am.resource.mb</name>
+    <value>512</value>
+  </property>
+  <property>
+    <name>yarn.app.mapreduce.am.command-opts</name>
+    <value>-Xmx384m</value>
+  </property>
+  <property>
     <name>mapreduce.jobhistory.address</name>
     <value>localhost:10020</value>
   </property>

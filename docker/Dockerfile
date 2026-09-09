@@ -10,8 +10,8 @@ RUN apt-get update \
         procps \
         zip \
     && rm -rf /var/lib/apt/lists/* \
-    && usermod --login student --home /home/student --move-home hadoop \
-    && mkdir -p /data/hadoop /opt/course /var/log/hadoop /var/run/hadoop \
+    && usermod --login student --home /home/student hadoop \
+    && mkdir -p /data/hadoop /home/student /opt/course /var/log/hadoop /var/run/hadoop \
     && chown -R student:users /data/hadoop /home/student /opt/course /var/log/hadoop /var/run/hadoop
 
 COPY --chown=student:users docker/hadoop-conf/ /opt/hadoop/etc/hadoop/

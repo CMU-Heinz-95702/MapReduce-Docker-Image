@@ -16,6 +16,7 @@ required = [
     "docker/hadoop-conf/mapred-site.xml",
     "docker/hadoop-conf/yarn-site.xml",
     ".github/workflows/image.yml",
+    "tests/smoke_image.sh",
 ]
 
 for relative in required:
@@ -24,9 +25,13 @@ for relative in required:
 for relative in required[6:10]:
     ET.parse(ROOT / relative)
 
+mapred = (ROOT / "docker/hadoop-conf/mapred-site.xml").read_text(encoding="utf-8")
+assert "yarn.app.mapreduce.am.resource.mb" in mapred
+
 dockerfile = (ROOT / "docker/Dockerfile").read_text(encoding="utf-8")
 assert "FROM ghcr.io/apache/hadoop:3.5.0@sha256:" in dockerfile
 assert 'ENTRYPOINT ["/usr/local/bin/course-entrypoint"]' in dockerfile
 assert "ln -sfn" in dockerfile, "examples JAR alias must be idempotent"
+assert "--move-home" not in dockerfile, "must not move the /opt/hadoop user home"
 
 print("Image repository contracts are valid.")

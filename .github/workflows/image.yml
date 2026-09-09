@@ -30,36 +30,7 @@ jobs:
           load: true
           tags: ${{ env.TEST_IMAGE }}
       - name: Smoke-test Hadoop health
-        shell: bash
-        run: |
-          mkdir -p "$RUNNER_TEMP/datasets" "$RUNNER_TEMP/workspace"
-          touch "$RUNNER_TEMP/datasets/words.txt" \
-            "$RUNNER_TEMP/datasets/combinedYears.txt" \
-            "$RUNNER_TEMP/datasets/P1V.txt" \
-            "$RUNNER_TEMP/datasets/CrimeLatLonXYTabs.txt" \
-            "$RUNNER_TEMP/checksums.sha256"
-          docker run -d --name hadoop-ci \
-            -v "$RUNNER_TEMP/datasets:/home/public:ro" \
-            -v "$RUNNER_TEMP/checksums.sha256:/opt/course/checksums.sha256:ro" \
-            -v "$RUNNER_TEMP/workspace:/home/student/Project5:rw" \
-            "$TEST_IMAGE"
-          for attempt in {1..24}; do
-            if docker exec hadoop-ci hadoop-healthcheck; then
-              docker exec hadoop-ci hadoop jar \
-                /opt/hadoop/share/hadoop/mapreduce/hadoop-mapreduce-examples.jar \
-                pi 2 100
-              exit 0
-            fi
-            sleep 5
-          done
-          docker logs hadoop-ci
-          exit 1
-      - name: Show container logs after failure
-        if: failure()
-        run: docker logs hadoop-ci || true
-      - name: Remove smoke-test container
-        if: always()
-        run: docker rm -f hadoop-ci || true
+        run: tests/smoke_image.sh "$TEST_IMAGE"
 
   publish:
     if: startsWith(github.ref, 'refs/tags/image-v')
