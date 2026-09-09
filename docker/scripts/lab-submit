@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+readonly workspace=/home/student/Project5
+readonly destination="$workspace/submission.zip"
+stage=$(mktemp -d)
+archive=$(mktemp --suffix=.zip)
+
+cleanup() {
+  rm -rf "$stage" "$archive"
+}
+trap cleanup EXIT
+
+if [[ ! -d "$workspace/Part_1" ]]; then
+  echo "Missing $workspace/Part_1" >&2
+  exit 1
+fi
+
+cd "$workspace"
+copied=0
+while IFS= read -r -d '' source_file; do
+  relative=${source_file#./}
+  mkdir -p "$stage/$(dirname "$relative")"
+  cp "$source_file" "$stage/$relative"
+  copied=$((copied + 1))
+done < <(find ./Part_1 -type f \( -name '*.java' -o -name 'Task[0-7]Output' \) -print0)
+
+if (( copied == 0 )); then
+  echo "No Java source or task outputs were found." >&2
+  exit 1
+fi
+
+hadoop_version=$(hadoop version | head -n 1)
+java_version=$(java -version 2>&1 | head -n 1)
+generated_at=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
+
+jq -n \
+  --arg schemaVersion "1" \
+  --arg contractVersion "$LAB_CONTRACT_VERSION" \
+  --arg hadoopVersion "$hadoop_version" \
+  --arg javaVersion "$java_version" \
+  --arg architecture "$(uname -m)" \
+  --arg generatedAt "$generated_at" \
+  '{
+    schema_version: $schemaVersion,
+    contract_version: $contractVersion,
+    hadoop_version: $hadoopVersion,
+    java_version: $javaVersion,
+    architecture: $architecture,
+    generated_at: $generatedAt
+  }' > "$stage/manifest.json"
+
+(cd "$stage" && zip -q -r "$archive" .)
+mv -f "$archive" "$destination"
+echo "Created $destination"

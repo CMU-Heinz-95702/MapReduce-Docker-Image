@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+set -u
+
+readonly dataset_dir=/home/public
+readonly checksum_file=/opt/course/checksums.sha256
+readonly required=(
+  words.txt
+  combinedYears.txt
+  P1V.txt
+  CrimeLatLonXYTabs.txt
+)
+
+status=0
+for filename in "${required[@]}"; do
+  if [[ ! -f "$dataset_dir/$filename" ]]; then
+    echo "MISSING: $dataset_dir/$filename" >&2
+    status=1
+  fi
+done
+
+if (( status != 0 )); then
+  exit "$status"
+fi
+
+if grep -Eq '^[[:xdigit:]]{64}[[:space:]]+' "$checksum_file"; then
+  echo "Checking instructor dataset hashes..."
+  (cd "$dataset_dir" && sha256sum --check "$checksum_file")
+else
+  echo "WARNING: datasets exist, but checksums.sha256 has not been populated." >&2
+fi
+
+echo "All required datasets are present."

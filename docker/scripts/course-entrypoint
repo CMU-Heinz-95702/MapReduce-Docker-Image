@@ -1,0 +1,90 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+if (( $# > 0 )); then
+  exec "$@"
+fi
+
+readonly name_dir=/data/hadoop/namenode
+readonly data_dir=/data/hadoop/datanode
+readonly yarn_dir=/data/hadoop/yarn
+stopping=0
+
+stop_hadoop() {
+  if (( stopping == 1 )); then
+    return
+  fi
+  stopping=1
+  echo "Stopping Hadoop services..."
+  mapred --daemon stop historyserver 2>/dev/null || true
+  yarn --daemon stop nodemanager 2>/dev/null || true
+  yarn --daemon stop resourcemanager 2>/dev/null || true
+  hdfs --daemon stop datanode 2>/dev/null || true
+  hdfs --daemon stop namenode 2>/dev/null || true
+}
+
+trap stop_hadoop EXIT INT TERM
+
+mkdir -p \
+  "$name_dir" \
+  "$data_dir" \
+  "$yarn_dir/local" \
+  "$yarn_dir/logs" \
+  "$HADOOP_LOG_DIR" \
+  "$HADOOP_PID_DIR" \
+  /home/student/Project5
+
+if [[ ! -f "$name_dir/current/VERSION" ]]; then
+  echo "Formatting the HDFS NameNode for first use..."
+  hdfs namenode -format -force -nonInteractive -clusterId CID-cmu-95702-local
+fi
+
+echo "Starting HDFS..."
+hdfs --daemon start namenode
+hdfs --daemon start datanode
+
+report_ready=0
+for _ in $(seq 1 60); do
+  if hdfs dfsadmin -report >/dev/null 2>&1; then
+    report_ready=1
+    break
+  fi
+  sleep 1
+done
+
+if (( report_ready == 0 )); then
+  echo "HDFS did not accept connections within 60 seconds." >&2
+  exit 1
+fi
+
+if ! timeout 60 hdfs dfsadmin -safemode wait; then
+  echo "HDFS did not leave safe mode within 60 seconds." >&2
+  exit 1
+fi
+
+hdfs dfs -mkdir -p /user/student /tmp /tmp/logs /mr-history/tmp /mr-history/done
+hdfs dfs -chmod 0755 /user/student
+hdfs dfs -chmod 1777 /tmp /tmp/logs /mr-history/tmp
+hdfs dfs -chmod 0755 /mr-history/done
+
+echo "Starting YARN and MapReduce JobHistory..."
+yarn --daemon start resourcemanager
+yarn --daemon start nodemanager
+mapred --daemon start historyserver
+
+if ! verify-datasets; then
+  echo "Course datasets are incomplete. Hadoop is running, but Project 5 inputs are not ready." >&2
+fi
+
+echo "Hadoop is ready. Open a shell with: docker compose exec hadoop bash"
+echo "NameNode: http://localhost:9870 | YARN: http://localhost:8088 | History: http://localhost:19888"
+
+shopt -s nullglob
+logs=("$HADOOP_LOG_DIR"/*.log)
+if (( ${#logs[@]} == 0 )); then
+  while true; do sleep 3600 & wait $!; done
+else
+  tail -n 0 -F "${logs[@]}" &
+  log_pid=$!
+  wait "$log_pid"
+fi

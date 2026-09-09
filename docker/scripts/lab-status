@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+echo "Hadoop version"
+hadoop version | head -n 1
+echo
+echo "Java version"
+java -version 2>&1 | head -n 1
+echo
+echo "HDFS"
+hdfs dfsadmin -report
+echo
+echo "YARN nodes"
+yarn node -list -all
+echo
+echo "Datasets"
+verify-datasets

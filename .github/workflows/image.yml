@@ -1,0 +1,92 @@
+name: Build course image
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+    tags: ["image-v*"]
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  TEST_IMAGE: lab9-hadoop:ci
+
+jobs:
+  validate-and-smoke-test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Validate repository contracts
+        run: python tests/validate_repository.py
+      - name: Build amd64 test image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile
+          platforms: linux/amd64
+          load: true
+          tags: ${{ env.TEST_IMAGE }}
+      - name: Smoke-test Hadoop health
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/datasets" "$RUNNER_TEMP/workspace"
+          touch "$RUNNER_TEMP/datasets/words.txt" \
+            "$RUNNER_TEMP/datasets/combinedYears.txt" \
+            "$RUNNER_TEMP/datasets/P1V.txt" \
+            "$RUNNER_TEMP/datasets/CrimeLatLonXYTabs.txt" \
+            "$RUNNER_TEMP/checksums.sha256"
+          docker run -d --name hadoop-ci \
+            -v "$RUNNER_TEMP/datasets:/home/public:ro" \
+            -v "$RUNNER_TEMP/checksums.sha256:/opt/course/checksums.sha256:ro" \
+            -v "$RUNNER_TEMP/workspace:/home/student/Project5:rw" \
+            "$TEST_IMAGE"
+          for attempt in {1..24}; do
+            if docker exec hadoop-ci hadoop-healthcheck; then
+              docker exec hadoop-ci hadoop jar \
+                /opt/hadoop/share/hadoop/mapreduce/hadoop-mapreduce-examples.jar \
+                pi 2 100
+              exit 0
+            fi
+            sleep 5
+          done
+          docker logs hadoop-ci
+          exit 1
+      - name: Show container logs after failure
+        if: failure()
+        run: docker logs hadoop-ci || true
+
+  publish:
+    if: startsWith(github.ref, 'refs/tags/image-v')
+    needs: validate-and-smoke-test
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Derive immutable image tag
+        id: image
+        shell: bash
+        run: |
+          repository="${GITHUB_REPOSITORY,,}"
+          version="${GITHUB_REF_NAME#image-v}"
+          echo "name=ghcr.io/$repository" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - name: Build and publish multi-architecture image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.image.outputs.name }}:${{ steps.image.outputs.version }}
+          provenance: mode=max
+          sbom: true
