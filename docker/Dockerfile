@@ -23,7 +23,7 @@ RUN chmod 0755 \
         /usr/local/bin/lab-status \
         /usr/local/bin/lab-submit \
         /usr/local/bin/verify-datasets \
-    && ln -s \
+    && ln -sfn \
         /opt/hadoop/share/hadoop/mapreduce/hadoop-mapreduce-examples-3.5.0.jar \
         /opt/hadoop/share/hadoop/mapreduce/hadoop-mapreduce-examples.jar
 

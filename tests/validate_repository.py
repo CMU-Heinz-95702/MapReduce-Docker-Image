@@ -27,5 +27,6 @@ for relative in required[6:10]:
 dockerfile = (ROOT / "docker/Dockerfile").read_text(encoding="utf-8")
 assert "FROM ghcr.io/apache/hadoop:3.5.0@sha256:" in dockerfile
 assert 'ENTRYPOINT ["/usr/local/bin/course-entrypoint"]' in dockerfile
+assert "ln -sfn" in dockerfile, "examples JAR alias must be idempotent"
 
 print("Image repository contracts are valid.")
