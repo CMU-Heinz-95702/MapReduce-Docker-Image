@@ -57,6 +57,9 @@ jobs:
       - name: Show container logs after failure
         if: failure()
         run: docker logs hadoop-ci || true
+      - name: Remove smoke-test container
+        if: always()
+        run: docker rm -f hadoop-ci || true
 
   publish:
     if: startsWith(github.ref, 'refs/tags/image-v')
